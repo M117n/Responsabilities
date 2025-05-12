@@ -1,0 +1,153 @@
+<!-- save as worker_responsibility_app.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Worker Responsibility Manager</title>
+
+<!-- jsPDF & html2canvas CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+        integrity="sha512-/KbJcaiMDrP4ypqKqRR3YKHyCuXapnwXCfJOLLmObAun1vDLteA94ppIqhzyapMI2vlA38nSxrdbidK4USsXkg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+        integrity="sha512-BNaNj+JzRjUlvyC2WkPOMfgH0CQpZK0s8AjtKoa6HgMHqmpYyqn1nVbWcv16O3MHuvb6jVWeNseyX2VINqbzjw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<style>
+  body {font-family: Arial, sans-serif; margin: 20px;}
+  h1 {text-align: center;}
+  .flex {display:flex; gap:2rem; flex-wrap: wrap;}
+  .card {border:1px solid #ccc; border-radius:6px; padding:1rem; min-width:200px; box-shadow:0 2px 4px rgba(0,0,0,.1);}
+  .card h3 {margin-top:0;}
+  label {display:block; margin-top:0.5rem;}
+  input, select, button {padding:0.5rem; margin-top:0.25rem;}
+  button {cursor:pointer;}
+  .btn-primary {background:#1976d2; color:#fff; border:none; border-radius:4px;}
+  .btn-primary:hover {background:#115293;}
+  @media print {button {display:none;}}
+</style>
+</head>
+<body>
+<h1>Worker Responsibility Manager</h1>
+
+<!-- Add workers -->
+<section id="worker-input-section">
+  <h2>Add Workers</h2>
+  <label for="worker-name">Worker Name</label>
+  <input type="text" id="worker-name" placeholder="e.g. Alice" />
+  <button class="btn-primary" onclick="addWorker()">Add Worker</button>
+</section>
+
+<!-- Add responsibilities -->
+<section id="responsibility-input-section" style="margin-top:2rem;">
+  <h2>Add Responsibility</h2>
+  <label for="responsibility-text">Responsibility</label>
+  <input type="text" id="responsibility-text" placeholder="e.g. Inventory Check" />
+  <label for="worker-select">Assign To</label>
+  <select id="worker-select"></select>
+  <button class="btn-primary" onclick="addResponsibility()">Assign Responsibility</button>
+</section>
+
+<!-- PDF button -->
+<section style="margin-top:2rem;">
+  <button class="btn-primary" onclick="generatePDF()">Download PDF Sheets</button>
+</section>
+
+<hr/>
+<!-- Live overview -->
+<section>
+  <h2>Overview</h2>
+  <div id="worker-cards" class="flex"></div>
+</section>
+
+<script>
+  const workers = []; // {name:\"\", responsibilities:[]}
+
+  function addWorker() {
+    const nameInput = document.getElementById('worker-name');
+    const name = nameInput.value.trim();
+    if (!name) { alert('Enter a name'); return; }
+    workers.push({ name, responsibilities: [] });
+    nameInput.value = '';
+    updateWorkerSelect();
+    renderWorkers();
+  }
+
+  function updateWorkerSelect() {
+    const select = document.getElementById('worker-select');
+    select.innerHTML = '';
+    workers.forEach((w, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = w.name;
+      select.appendChild(opt);
+    });
+  }
+
+  function addResponsibility() {
+    const textInput = document.getElementById('responsibility-text');
+    const resp = textInput.value.trim();
+    if (!resp) { alert('Enter a responsibility'); return; }
+    const idx = parseInt(document.getElementById('worker-select').value);
+    if (isNaN(idx)) { alert('Add a worker first'); return; }
+    workers[idx].responsibilities.push(resp);
+    textInput.value = '';
+    renderWorkers();
+  }
+
+  function renderWorkers() {
+    const container = document.getElementById('worker-cards');
+    container.innerHTML = '';
+    workers.forEach(w => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<h3>${w.name}</h3>`;
+      const ul = document.createElement('ul');
+      w.responsibilities.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = r;
+        ul.appendChild(li);
+      });
+      card.appendChild(ul);
+      container.appendChild(card);
+    });
+  }
+
+  async function generatePDF() {
+    if (workers.length === 0) { alert('No workers to export'); return; }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+
+    for (let i = 0; i < workers.length; i++) {
+      const w = workers[i];
+
+      // Temporary div for capture
+      const temp = document.createElement('div');
+      temp.style.width = '595pt'; // A4 width
+      temp.style.padding = '40pt';
+      temp.innerHTML = `<h2>${w.name}</h2><h3>Responsibilities</h3>`;
+      const list = document.createElement('ul');
+      w.responsibilities.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = r;
+        list.appendChild(li);
+      });
+      temp.appendChild(list);
+      document.body.appendChild(temp);
+
+      await html2canvas(temp, { scale: 2 }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = 595;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      });
+
+      document.body.removeChild(temp);
+      if (i !== workers.length - 1) pdf.addPage();
+    }
+    pdf.save('worker_responsibilities.pdf');
+  }
+</script>
+</body>
+</html>
