@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Worker Responsibility Manager (persistent + re‑order)</title>
+<title>Worker Responsibility Manager (mobile‑friendly drag & drop)</title>
+
+<!-- SortableJS for touch‑safe drag & drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"
+        integrity="sha384-5S/BmEUF3VfrLWtM1PxWxe0lI97LMXoSJZSHyvVChWtIXvgPl2rN34uHrv4WpGZ/"
+        crossorigin="anonymous"></script>
 
 <style>
   body{font-family:Arial, sans-serif;margin:20px}
@@ -18,10 +23,11 @@
   .btn-primary:hover{background:#115293}
   .btn-danger{background:transparent;border:none;font-size:1rem;line-height:1;cursor:pointer}
   .btn-danger:hover{color:#d32f2f}
-  .btn-sort{background:transparent;border:none;font-size:.9rem;width:1.8rem}
-  .btn-sort:disabled{opacity:.3;cursor:default}
   .btn-reset{background:#d32f2f;color:#fff;border:none;border-radius:4px}
   .btn-reset:hover{background:#aa1e1e}
+  .drag-handle{cursor:grab;margin-right:.5rem;font-size:1.1rem}
+  .sortable-chosen{background:#e3f2fd}
+  .sortable-ghost{opacity:.4}
   @media print{button{display:none}}
 </style>
 </head>
@@ -55,7 +61,7 @@
 <hr>
 <!-- Overview -->
 <section>
-  <h2>Overview (tap ▲▼ to re‑order)</h2>
+  <h2>Overview (drag responsibilities to re‑order)</h2>
   <div id="worker-cards" class="flex"></div>
 </section>
 
@@ -70,11 +76,10 @@ const workers = loadWorkers();
 
 /* ---------- CRUD helpers ---------- */
 function addWorker() {
-  const inp = document.getElementById('worker-name');
-  const name = inp.value.trim();
+  const name = document.getElementById('worker-name').value.trim();
   if (!name) return alert('Enter a name');
   workers.push({ name, responsibilities: [] });
-  inp.value = '';
+  document.getElementById('worker-name').value = '';
   saveWorkers();
   updateWorkerSelect();
   renderWorkers();
@@ -105,15 +110,6 @@ function deleteWorker(wIdx) {
   renderWorkers();
 }
 
-function moveResponsibility(wIdx, rIdx, dir) {        // dir = -1 (up) or 1 (down)
-  const list = workers[wIdx].responsibilities;
-  const newIdx = rIdx + dir;
-  if (newIdx < 0 || newIdx >= list.length) return;    // out of bounds
-  [list[rIdx], list[newIdx]] = [list[newIdx], list[rIdx]];
-  saveWorkers();
-  renderWorkers();
-}
-
 function resetAll() {
   if (!confirm('This will remove every worker and responsibility. Continue?')) return;
   localStorage.removeItem(STORAGE_KEY);
@@ -126,6 +122,20 @@ function updateWorkerSelect() {
   const sel = document.getElementById('worker-select');
   sel.innerHTML = '';
   workers.forEach((w, i) => sel.add(new Option(w.name, i)));
+}
+
+function makeSortable(ul, wIdx) {
+  Sortable.create(ul, {
+    animation: 150,
+    handle: '.drag-handle',
+    onEnd: evt => {
+      if (evt.oldIndex === evt.newIndex) return;
+      const list = workers[wIdx].responsibilities;
+      const [moved] = list.splice(evt.oldIndex, 1);
+      list.splice(evt.newIndex, 0, moved);
+      saveWorkers();           // persist new order
+    }
+  });
 }
 
 function renderWorkers() {
@@ -141,17 +151,13 @@ function renderWorkers() {
                 onclick="deleteWorker(${wIdx})">🗑</button>
       </h3>`;
     const ul = document.createElement('ul');
+    ul.dataset.wIdx = wIdx;   // for clarity (not essential)
     w.responsibilities.forEach((r, rIdx) => {
       const li = document.createElement('li');
       li.style.display = 'flex';
       li.style.alignItems = 'center';
       li.innerHTML = `
-        <button class="btn-sort" title="Move up"
-                onclick="moveResponsibility(${wIdx},${rIdx},-1)"
-                ${rIdx===0?'disabled':''}>▲</button>
-        <button class="btn-sort" title="Move down"
-                onclick="moveResponsibility(${wIdx},${rIdx},1)"
-                ${rIdx===w.responsibilities.length-1?'disabled':''}>▼</button>
+        <span class="drag-handle">≡</span>
         <span style="flex:1; margin:0 .5rem">${r}</span>
         <button class="btn-danger" title="Delete responsibility"
                 onclick="deleteResponsibility(${wIdx},${rIdx})">🗑</button>`;
@@ -159,12 +165,13 @@ function renderWorkers() {
     });
     card.appendChild(ul);
     wrap.appendChild(card);
+    makeSortable(ul, wIdx);   // attach SortableJS
   });
   updateWorkerSelect();
 }
 renderWorkers();
 
-/* ---------- PDF export ---------- */
+/* ---------- PDF export (unchanged) ---------- */
 async function generatePDF() {
   if (workers.length === 0) return alert('No workers to export');
   const jsPDFCtor =
