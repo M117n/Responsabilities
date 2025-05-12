@@ -1,12 +1,11 @@
-<!-- worker_responsibility_app.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Worker Responsibility Manager</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worker Responsibility Manager (persistent)</title>
 
-<!-- jsPDF & html2canvas CDN -->
+<!-- jsPDF + html2canvas -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
         integrity="sha512-/KbJcaiMDrP4ypqKqRR3YKHyCuXapnwXCfJOLLmObAun1vDLteA94ppIqhzyapMI2vlA38nSxrdbidK4USsXkg=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -15,48 +14,53 @@
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <style>
-  body {font-family: Arial, sans-serif; margin: 20px;}
-  h1 {text-align: center;}
-  .flex {display:flex; gap:2rem; flex-wrap: wrap;}
-  .card {border:1px solid #ccc; border-radius:6px; padding:1rem; min-width:200px; box-shadow:0 2px 4px rgba(0,0,0,.1);}
-  .card h3 {margin-top:0; display:flex; justify-content:space-between; align-items:center;}
-  label {display:block; margin-top:0.5rem;}
-  input, select, button {padding:0.5rem; margin-top:0.25rem;}
-  button {cursor:pointer;}
-  .btn-primary {background:#1976d2; color:#fff; border:none; border-radius:4px;}
-  .btn-primary:hover {background:#115293;}
-  .btn-danger {background:transparent; border:none; font-size:1rem; line-height:1; cursor:pointer;}
-  .btn-danger:hover {color:#d32f2f;}
-  @media print {button {display:none;}}
+  body{font-family:Arial, sans-serif;margin:20px}
+  h1{text-align:center}
+  .flex{display:flex;gap:2rem;flex-wrap:wrap}
+  .card{border:1px solid #ccc;border-radius:6px;padding:1rem;min-width:200px;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+  .card h3{margin-top:0;display:flex;justify-content:space-between;align-items:center}
+  label{display:block;margin-top:.5rem}
+  input,select,button{padding:.5rem;margin-top:.25rem}
+  button{cursor:pointer}
+  .btn-primary{background:#1976d2;color:#fff;border:none;border-radius:4px}
+  .btn-primary:hover{background:#115293}
+  .btn-danger{background:transparent;border:none;font-size:1rem;line-height:1;cursor:pointer}
+  .btn-danger:hover{color:#d32f2f}
+  .btn-reset{background:#d32f2f;color:#fff;border:none;border-radius:4px}
+  .btn-reset:hover{background:#aa1e1e}
+  @media print{button{display:none}}
 </style>
 </head>
 <body>
 <h1>Worker Responsibility Manager</h1>
 
 <!-- Add workers -->
-<section id="worker-input-section">
+<section>
   <h2>Add Workers</h2>
   <label for="worker-name">Worker Name</label>
-  <input type="text" id="worker-name" placeholder="e.g. Alice" />
+  <input type="text" id="worker-name" placeholder="e.g. Alice">
   <button class="btn-primary" onclick="addWorker()">Add Worker</button>
 </section>
 
 <!-- Add responsibilities -->
-<section id="responsibility-input-section" style="margin-top:2rem;">
+<section style="margin-top:2rem;">
   <h2>Add Responsibility</h2>
   <label for="responsibility-text">Responsibility</label>
-  <input type="text" id="responsibility-text" placeholder="e.g. Inventory Check" />
+  <input type="text" id="responsibility-text" placeholder="e.g. Inventory Check">
   <label for="worker-select">Assign To</label>
   <select id="worker-select"></select>
   <button class="btn-primary" onclick="addResponsibility()">Assign Responsibility</button>
 </section>
 
-<!-- PDF button -->
+<!-- PDF + Reset -->
 <section style="margin-top:2rem;">
   <button class="btn-primary" onclick="generatePDF()">Download PDF Sheets</button>
+  <button class="btn-reset" style="margin-left:.5rem;" onclick="resetAll()">
+    Reset All Data
+  </button>
 </section>
 
-<hr/>
+<hr>
 <!-- Live overview -->
 <section>
   <h2>Overview</h2>
@@ -64,84 +68,99 @@
 </section>
 
 <script>
-  const workers = []; // [{name:"", responsibilities:[]}]
+  /* ---------- Persistence helpers ---------- */
+  const STORAGE_KEY = 'workers';
+  const loadWorkers = () =>
+    JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  const saveWorkers = () =>
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(workers));
 
+  /* ---------- In‑memory model ---------- */
+  const workers = loadWorkers();    // preload from storage
+
+  /* ---------- CRUD ---------- */
   function addWorker() {
-    const nameInput = document.getElementById('worker-name');
-    const name = nameInput.value.trim();
+    const inp = document.getElementById('worker-name');
+    const name = inp.value.trim();
     if (!name) { alert('Enter a name'); return; }
     workers.push({ name, responsibilities: [] });
-    nameInput.value = '';
+    inp.value = '';
+    saveWorkers();
     updateWorkerSelect();
     renderWorkers();
-  }
-
-  function updateWorkerSelect() {
-    const select = document.getElementById('worker-select');
-    select.innerHTML = '';
-    workers.forEach((w, idx) => {
-      const opt = document.createElement('option');
-      opt.value = idx;
-      opt.textContent = w.name;
-      select.appendChild(opt);
-    });
   }
 
   function addResponsibility() {
-    const textInput = document.getElementById('responsibility-text');
-    const resp = textInput.value.trim();
-    if (!resp) { alert('Enter a responsibility'); return; }
+    const text = document.getElementById('responsibility-text').value.trim();
+    if (!text) { alert('Enter a responsibility'); return; }
     const idx = parseInt(document.getElementById('worker-select').value);
     if (isNaN(idx)) { alert('Add a worker first'); return; }
-    workers[idx].responsibilities.push(resp);
-    textInput.value = '';
+    workers[idx].responsibilities.push(text);
+    document.getElementById('responsibility-text').value = '';
+    saveWorkers();
     renderWorkers();
   }
 
-  function deleteResponsibility(workerIdx, respIdx) {
-    workers[workerIdx].responsibilities.splice(respIdx, 1);
+  function deleteResponsibility(wIdx, rIdx) {
+    workers[wIdx].responsibilities.splice(rIdx, 1);
+    saveWorkers();
     renderWorkers();
   }
 
-  function deleteWorker(workerIdx) {
-    if(!confirm('Delete this worker and all their responsibilities?')) return;
-    workers.splice(workerIdx, 1);
+  function deleteWorker(wIdx) {
+    if (!confirm('Delete this worker and all their responsibilities?')) return;
+    workers.splice(wIdx, 1);
+    saveWorkers();
     updateWorkerSelect();
     renderWorkers();
   }
 
+  /* ---------- NEW: reset ---------- */
+  function resetAll() {
+    if (!confirm('This will remove every worker and responsibility. Continue?')) return;
+    localStorage.removeItem(STORAGE_KEY); // wipe storage
+    workers.length = 0;                   // clear in‑memory list
+    renderWorkers();                      // redraw empty UI
+  }
+
+  /* ---------- UI refresh ---------- */
+  function updateWorkerSelect() {
+    const sel = document.getElementById('worker-select');
+    sel.innerHTML = '';
+    workers.forEach((w, i) => sel.add(new Option(w.name, i)));
+  }
+
   function renderWorkers() {
-    const container = document.getElementById('worker-cards');
-    container.innerHTML = '';
+    const wrap = document.getElementById('worker-cards');
+    wrap.innerHTML = '';
     workers.forEach((w, wIdx) => {
-      const card = document.createElement('div');
-      card.className = 'card';
-
-      // Card header with delete worker button
-      const header = document.createElement('h3');
-      header.innerHTML = `<span>${w.name}</span>
-                          <button class="btn-danger" title="Delete worker"
-                                  onclick="deleteWorker(${wIdx})">🗑</button>`;
-      card.appendChild(header);
-
-      // Responsibility list
+      const c = document.createElement('div');
+      c.className = 'card';
+      c.innerHTML = `
+        <h3>
+          <span>${w.name}</span>
+          <button class="btn-danger" title="Delete worker"
+                  onclick="deleteWorker(${wIdx})">🗑</button>
+        </h3>`;
       const ul = document.createElement('ul');
       w.responsibilities.forEach((r, rIdx) => {
         const li = document.createElement('li');
         li.style.display = 'flex';
         li.style.justifyContent = 'space-between';
         li.style.alignItems = 'center';
-        li.innerHTML = `<span>${r}</span>
-                        <button class="btn-danger" title="Delete responsibility"
-                                onclick="deleteResponsibility(${wIdx}, ${rIdx})">🗑</button>`;
+        li.innerHTML = `
+          <span>${r}</span>
+          <button class="btn-danger" title="Delete responsibility"
+                  onclick="deleteResponsibility(${wIdx},${rIdx})">🗑</button>`;
         ul.appendChild(li);
       });
-      card.appendChild(ul);
-      container.appendChild(card);
+      c.appendChild(ul);
+      wrap.appendChild(c);
     });
     updateWorkerSelect();
   }
 
+  /* ---------- PDF export ---------- */
   async function generatePDF() {
     if (workers.length === 0) { alert('No workers to export'); return; }
     const { jsPDF } = window.jspdf;
@@ -150,32 +169,35 @@
     for (let i = 0; i < workers.length; i++) {
       const w = workers[i];
 
-      // Temporary div for capture
-      const temp = document.createElement('div');
-      temp.style.width = '595pt'; // A4 width
-      temp.style.padding = '40pt';
-      temp.innerHTML = `<h2>${w.name}</h2><h3>Responsibilities</h3>`;
+      // temp div for capture
+      const tmp = document.createElement('div');
+      tmp.style.width = '595pt';
+      tmp.style.padding = '40pt';
+      tmp.innerHTML = `<h2>${w.name}</h2><h3>Responsibilities</h3>`;
       const list = document.createElement('ul');
       w.responsibilities.forEach(r => {
         const li = document.createElement('li');
         li.textContent = r;
         list.appendChild(li);
       });
-      temp.appendChild(list);
-      document.body.appendChild(temp);
+      tmp.appendChild(list);
+      document.body.appendChild(tmp);
 
-      await html2canvas(temp, { scale: 2 }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const imgWidth = 595;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      await html2canvas(tmp, { scale: 2 }).then(cv => {
+        const img = cv.toDataURL('image/png');
+        const wPt = 595;
+        const hPt = cv.height * wPt / cv.width;
+        pdf.addImage(img, 'PNG', 0, 0, wPt, hPt);
       });
 
-      document.body.removeChild(temp);
+      document.body.removeChild(tmp);
       if (i !== workers.length - 1) pdf.addPage();
     }
     pdf.save('worker_responsibilities.pdf');
   }
+
+  /* ---------- First paint ---------- */
+  renderWorkers();       // build cards from stored data
 </script>
 </body>
 </html>
