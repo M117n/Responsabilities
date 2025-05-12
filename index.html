@@ -1,4 +1,4 @@
-<!-- save as worker_responsibility_app.html -->
+<!-- worker_responsibility_app.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,12 +19,14 @@
   h1 {text-align: center;}
   .flex {display:flex; gap:2rem; flex-wrap: wrap;}
   .card {border:1px solid #ccc; border-radius:6px; padding:1rem; min-width:200px; box-shadow:0 2px 4px rgba(0,0,0,.1);}
-  .card h3 {margin-top:0;}
+  .card h3 {margin-top:0; display:flex; justify-content:space-between; align-items:center;}
   label {display:block; margin-top:0.5rem;}
   input, select, button {padding:0.5rem; margin-top:0.25rem;}
   button {cursor:pointer;}
   .btn-primary {background:#1976d2; color:#fff; border:none; border-radius:4px;}
   .btn-primary:hover {background:#115293;}
+  .btn-danger {background:transparent; border:none; font-size:1rem; line-height:1; cursor:pointer;}
+  .btn-danger:hover {color:#d32f2f;}
   @media print {button {display:none;}}
 </style>
 </head>
@@ -62,7 +64,7 @@
 </section>
 
 <script>
-  const workers = []; // {name:\"\", responsibilities:[]}
+  const workers = []; // [{name:"", responsibilities:[]}]
 
   function addWorker() {
     const nameInput = document.getElementById('worker-name');
@@ -96,22 +98,48 @@
     renderWorkers();
   }
 
+  function deleteResponsibility(workerIdx, respIdx) {
+    workers[workerIdx].responsibilities.splice(respIdx, 1);
+    renderWorkers();
+  }
+
+  function deleteWorker(workerIdx) {
+    if(!confirm('Delete this worker and all their responsibilities?')) return;
+    workers.splice(workerIdx, 1);
+    updateWorkerSelect();
+    renderWorkers();
+  }
+
   function renderWorkers() {
     const container = document.getElementById('worker-cards');
     container.innerHTML = '';
-    workers.forEach(w => {
+    workers.forEach((w, wIdx) => {
       const card = document.createElement('div');
       card.className = 'card';
-      card.innerHTML = `<h3>${w.name}</h3>`;
+
+      // Card header with delete worker button
+      const header = document.createElement('h3');
+      header.innerHTML = `<span>${w.name}</span>
+                          <button class="btn-danger" title="Delete worker"
+                                  onclick="deleteWorker(${wIdx})">🗑</button>`;
+      card.appendChild(header);
+
+      // Responsibility list
       const ul = document.createElement('ul');
-      w.responsibilities.forEach(r => {
+      w.responsibilities.forEach((r, rIdx) => {
         const li = document.createElement('li');
-        li.textContent = r;
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
+        li.innerHTML = `<span>${r}</span>
+                        <button class="btn-danger" title="Delete responsibility"
+                                onclick="deleteResponsibility(${wIdx}, ${rIdx})">🗑</button>`;
         ul.appendChild(li);
       });
       card.appendChild(ul);
       container.appendChild(card);
     });
+    updateWorkerSelect();
   }
 
   async function generatePDF() {
