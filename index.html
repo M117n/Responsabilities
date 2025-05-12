@@ -18,10 +18,10 @@
   .btn-primary:hover{background:#115293}
   .btn-danger{background:transparent;border:none;font-size:1rem;line-height:1;cursor:pointer}
   .btn-danger:hover{color:#d32f2f}
+  .btn-sort{background:transparent;border:none;font-size:.9rem;width:1.8rem}
+  .btn-sort:disabled{opacity:.3;cursor:default}
   .btn-reset{background:#d32f2f;color:#fff;border:none;border-radius:4px}
   .btn-reset:hover{background:#aa1e1e}
-  .handle{cursor:grab;margin-right:.5rem;font-size:1.1rem}
-  li.drag-over{outline:2px dashed #1976d2}
   @media print{button{display:none}}
 </style>
 </head>
@@ -55,7 +55,7 @@
 <hr>
 <!-- Overview -->
 <section>
-  <h2>Overview (drag responsibilities to re‑order)</h2>
+  <h2>Overview (tap ▲▼ to re‑order)</h2>
   <div id="worker-cards" class="flex"></div>
 </section>
 
@@ -105,42 +105,20 @@ function deleteWorker(wIdx) {
   renderWorkers();
 }
 
+function moveResponsibility(wIdx, rIdx, dir) {        // dir = -1 (up) or 1 (down)
+  const list = workers[wIdx].responsibilities;
+  const newIdx = rIdx + dir;
+  if (newIdx < 0 || newIdx >= list.length) return;    // out of bounds
+  [list[rIdx], list[newIdx]] = [list[newIdx], list[rIdx]];
+  saveWorkers();
+  renderWorkers();
+}
+
 function resetAll() {
   if (!confirm('This will remove every worker and responsibility. Continue?')) return;
   localStorage.removeItem(STORAGE_KEY);
   workers.length = 0;
   renderWorkers();
-}
-
-/* ---------- Drag‑and‑drop ---------- */
-let dragSrc = null;   // {wIdx, rIdx}
-
-function handleDragStart(e) {
-  dragSrc = { wIdx: +this.dataset.wIdx, rIdx: +this.dataset.rIdx };
-  e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragOver(e) {
-  e.preventDefault();               // allow drop
-  this.classList.add('drag-over');  // visual cue
-}
-
-function handleDragLeave() { this.classList.remove('drag-over'); }
-
-function handleDrop(e) {
-  e.stopPropagation();
-  this.classList.remove('drag-over');
-  const dest = { wIdx:+this.dataset.wIdx, rIdx:+this.dataset.rIdx };
-  if (dragSrc && dest.wIdx === dragSrc.wIdx && dest.rIdx !== dragSrc.rIdx) {
-    const list = workers[dragSrc.wIdx].responsibilities;
-    const [moved] = list.splice(dragSrc.rIdx, 1);
-    let insertAt = dest.rIdx;
-    if (dragSrc.rIdx < dest.rIdx) insertAt--;  // account for removal shift
-    list.splice(insertAt, 0, moved);
-    saveWorkers();
-    renderWorkers();
-  }
-  dragSrc = null;
 }
 
 /* ---------- UI ---------- */
@@ -166,19 +144,15 @@ function renderWorkers() {
     w.responsibilities.forEach((r, rIdx) => {
       const li = document.createElement('li');
       li.style.display = 'flex';
-      li.style.justifyContent = 'space-between';
       li.style.alignItems = 'center';
-      li.draggable = true;
-      li.dataset.wIdx = wIdx;
-      li.dataset.rIdx = rIdx;
-      li.addEventListener('dragstart', handleDragStart);
-      li.addEventListener('dragover', handleDragOver);
-      li.addEventListener('dragleave', handleDragLeave);
-      li.addEventListener('drop', handleDrop);
-
       li.innerHTML = `
-        <span class="handle">≡</span>
-        <span style="flex:1">${r}</span>
+        <button class="btn-sort" title="Move up"
+                onclick="moveResponsibility(${wIdx},${rIdx},-1)"
+                ${rIdx===0?'disabled':''}>▲</button>
+        <button class="btn-sort" title="Move down"
+                onclick="moveResponsibility(${wIdx},${rIdx},1)"
+                ${rIdx===w.responsibilities.length-1?'disabled':''}>▼</button>
+        <span style="flex:1; margin:0 .5rem">${r}</span>
         <button class="btn-danger" title="Delete responsibility"
                 onclick="deleteResponsibility(${wIdx},${rIdx})">🗑</button>`;
       ul.appendChild(li);
