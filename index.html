@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Worker Responsibility Manager (persistent)</title>
+<title>Worker Responsibility Manager (persistent + re‑order)</title>
 
 <style>
   body{font-family:Arial, sans-serif;margin:20px}
@@ -20,6 +20,8 @@
   .btn-danger:hover{color:#d32f2f}
   .btn-reset{background:#d32f2f;color:#fff;border:none;border-radius:4px}
   .btn-reset:hover{background:#aa1e1e}
+  .handle{cursor:grab;margin-right:.5rem;font-size:1.1rem}
+  li.drag-over{outline:2px dashed #1976d2}
   @media print{button{display:none}}
 </style>
 </head>
@@ -53,7 +55,7 @@
 <hr>
 <!-- Overview -->
 <section>
-  <h2>Overview</h2>
+  <h2>Overview (drag responsibilities to re‑order)</h2>
   <div id="worker-cards" class="flex"></div>
 </section>
 
@@ -110,6 +112,37 @@ function resetAll() {
   renderWorkers();
 }
 
+/* ---------- Drag‑and‑drop ---------- */
+let dragSrc = null;   // {wIdx, rIdx}
+
+function handleDragStart(e) {
+  dragSrc = { wIdx: +this.dataset.wIdx, rIdx: +this.dataset.rIdx };
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+  e.preventDefault();               // allow drop
+  this.classList.add('drag-over');  // visual cue
+}
+
+function handleDragLeave() { this.classList.remove('drag-over'); }
+
+function handleDrop(e) {
+  e.stopPropagation();
+  this.classList.remove('drag-over');
+  const dest = { wIdx:+this.dataset.wIdx, rIdx:+this.dataset.rIdx };
+  if (dragSrc && dest.wIdx === dragSrc.wIdx && dest.rIdx !== dragSrc.rIdx) {
+    const list = workers[dragSrc.wIdx].responsibilities;
+    const [moved] = list.splice(dragSrc.rIdx, 1);
+    let insertAt = dest.rIdx;
+    if (dragSrc.rIdx < dest.rIdx) insertAt--;  // account for removal shift
+    list.splice(insertAt, 0, moved);
+    saveWorkers();
+    renderWorkers();
+  }
+  dragSrc = null;
+}
+
 /* ---------- UI ---------- */
 function updateWorkerSelect() {
   const sel = document.getElementById('worker-select');
@@ -135,8 +168,17 @@ function renderWorkers() {
       li.style.display = 'flex';
       li.style.justifyContent = 'space-between';
       li.style.alignItems = 'center';
+      li.draggable = true;
+      li.dataset.wIdx = wIdx;
+      li.dataset.rIdx = rIdx;
+      li.addEventListener('dragstart', handleDragStart);
+      li.addEventListener('dragover', handleDragOver);
+      li.addEventListener('dragleave', handleDragLeave);
+      li.addEventListener('drop', handleDrop);
+
       li.innerHTML = `
-        <span>${r}</span>
+        <span class="handle">≡</span>
+        <span style="flex:1">${r}</span>
         <button class="btn-danger" title="Delete responsibility"
                 onclick="deleteResponsibility(${wIdx},${rIdx})">🗑</button>`;
       ul.appendChild(li);
@@ -151,23 +193,13 @@ renderWorkers();
 /* ---------- PDF export ---------- */
 async function generatePDF() {
   if (workers.length === 0) return alert('No workers to export');
-
-  /* find the jsPDF constructor, no matter which global it used */
   const jsPDFCtor =
-    (window.jspdf && window.jspdf.jsPDF) ||           // UMD build
-    window.jsPDF;                                    // plain build
-
-  if (!jsPDFCtor) {
-    alert('jsPDF failed to load – check your connection');
-    return;
-  }
-
+    (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  if (!jsPDFCtor) { alert('jsPDF failed to load'); return; }
   const pdf = new jsPDFCtor({ orientation:'p', unit:'pt', format:'a4' });
 
   for (let i = 0; i < workers.length; i++) {
     const w = workers[i];
-
-    /* Build a temporary node to snapshot */
     const tmp = document.createElement('div');
     tmp.style.width = '595pt';
     tmp.style.padding = '40pt';
@@ -180,15 +212,10 @@ async function generatePDF() {
     });
     tmp.appendChild(list);
     document.body.appendChild(tmp);
-
-    /* Convert to canvas, then to image */
     await html2canvas(tmp, { scale:2 }).then(cv => {
-      const img = cv.toDataURL('image/png');
-      const wPt = 595;
-      const hPt = cv.height * wPt / cv.width;
-      pdf.addImage(img, 'PNG', 0, 0, wPt, hPt);
+      pdf.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0,
+                   595, cv.height * 595 / cv.width);
     });
-
     document.body.removeChild(tmp);
     if (i !== workers.length - 1) pdf.addPage();
   }
@@ -197,7 +224,6 @@ async function generatePDF() {
 </script>
 
 <!-- ------------- Libraries ------------- -->
-<!-- Placed at the very end so they finish before first use -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
         referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
